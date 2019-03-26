@@ -1,0 +1,61 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: drone-rbac
+subjects:
+  - kind: ServiceAccount
+    # Reference to upper's `metadata.name`
+    name: default
+    # Reference to upper's `metadata.namespace`
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: drone
+  template:
+    metadata:
+      labels:
+        name: drone
+    spec:
+      containers:
+        - name: drone
+          image: drone/drone:1.0.0-linux-arm
+          env:
+          - name: DRONE_KUBERNETES_ENABLED
+            value: "true"
+          - name: DRONE_KUBERNETES_NAMESPACE
+            value: default
+          - name: DRONE_GITEA_SERVER
+            value: http://192.168.1.211:31657/
+          - name: DRONE_RPC_SECRET
+            value: 9c3921e3e748aff725d2e16ef31fbc42
+          - name: DRONE_SERVER_HOST
+            value: 192.168.1.211:30358
+          - name: DRONE_SERVER_PROTO
+            value: http
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: drone
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    name: drone
+  sessionAffinity: None
+  type: NodePort

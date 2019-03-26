@@ -1,0 +1,75 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gitea-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: gitea
+  template:
+    metadata:
+      labels:
+        name: gitea
+    spec:
+      containers:
+      - image: kunde21/gitea-arm:arm-v1.7.2
+        name: gitea
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+        resources:
+          limits:
+            memory: "100Mi"
+        ports:
+        - containerPort: 3000
+        - containerPort: 22
+        env:
+        - name: DB_TYPE
+          value: postgres
+        - name: DB_HOST
+          value: db:5432
+        - name: DB_NAME
+          value: gitea
+        - name: DB_USER
+          value: gitea
+        - name: DB_PASSWD
+          value: gitea
+        - name: APP_NAME
+          value: "La Paz Cloud"
+        volumeMounts:
+          - name: gitea-pvc
+            mountPath: "/data"
+      volumes:
+      - name: gitea-pvc
+        persistentVolumeClaim:
+          claimName: gitea-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+spec:
+  ports:
+  - port: 3000
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    name: gitea
+  type: NodePort

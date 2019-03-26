@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.1.216
+    path: "/export/nfs/postgres"
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nfs
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: postgres
+  template:
+    metadata:
+      labels:
+        name: postgres
+    spec:
+      containers:
+      - image: postgres:alpine
+        name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: gitea
+        - name: POSTGRES_PASSWORD
+          value: gitea
+        volumeMounts:
+          - name: postgres-nfs
+            mountPath: "/var/lib/postgresql/data"
+      volumes:
+      - name: postgres-nfs
+        persistentVolumeClaim:
+          claimName: nfs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: postgres
+  name: db
+spec:
+  ports:
+  - port: 5432
+    protocol: TCP
+    targetPort: 5432
+  selector:
+    name: postgres
+  type: ClusterIP
