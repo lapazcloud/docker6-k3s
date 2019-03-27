@@ -1,40 +1,3 @@
-```yaml
-#cloud-config
-hostname: servidor
-manage_etc_hosts: true
-
-users:
-  - name: ops
-    sudo: ['ALL=(ALL) NOPASSWD:ALL']
-    shell: /bin/bash
-    plain_text_passwd: felizcumpledocker
-    lock_passwd: false
-    ssh_pwauth: true
-    chpasswd: { expire: false }
-    groups: sudo
-
-package_update: true
-package_upgrade: false
-
-packages:
-  - ntp
-  - nfs-common
-
-locale: "en_US.UTF-8"
-
-timezone: "America/La_Paz"
-
-runcmd:
-  - systemctl disable docker
-  - systemctl stop docker
-  - sysctl -w net.ipv6.conf.all.disable_ipv6=1
-  - sysctl -w net.ipv6.conf.default.disable_ipv6=1
-  - echo "Port 4444" >> /etc/ssh/sshd_config
-  - systemctl restart sshd
-  - curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--no-deploy traefik --no-deploy servicelb --cluster-secret=felizcumpledocker --write-kubeconfig /home/ops/kubeconfig" sh -
-  - systemctl enable k3s
-```
-
 ## Download Flash tool from Hypriot
 
 ```sh
@@ -43,7 +6,7 @@ chmod +x flash
 sudo mv flash /usr/local/bin/flash
 ```
 
-## servidor-master
+## servidor
 
 Connect your SD card
 
@@ -63,12 +26,12 @@ Wait around 5 minutes.
 	sed -i'' -e "s/localhost/servidor.local/g" servidor-worker.yaml
 	flash --userdata ./servidor-worker.yaml
 
-# Deploy an Ingress
+## Deploy an Ingress
 
-  kubectl apply -f https://raw.githubusercontent.com/containous/traefik/v1.7/examples/k8s/traefik-rbac.yaml
-  kubectl apply -f https://raw.githubusercontent.com/containous/traefik/v1.7/examples/k8s/traefik-ds.yaml
+  	kubectl apply -f https://raw.githubusercontent.com/containous/traefik/v1.7/examples/k8s/traefik-rbac.yaml
+	kubectl apply -f https://raw.githubusercontent.com/containous/traefik/v1.7/examples/k8s/traefik-ds.yaml
 
-# Editing CoreDNS
+## Editing CoreDNS
 
   kubectl -n kube-system edit configmap coredns -oyaml
 
@@ -97,16 +60,13 @@ data:
 
 # Deploy services
 
-  kubectl create -f storage-class.yaml
-
-  kubectl create ns gitea
-  kubectl create ns drone
-
-  kubectl create -f persistent-volumes.yaml
-
-  kubectl create -f volume-claims.yaml
-  
-  kubectl -n gitea create -f postgres.yaml
-  kubectl -n gitea create -f gitea.yaml
-
-  kubectl -n drone 
+	  kubectl create -f storage-class.yaml
+	
+	  kubectl create ns gitea
+	  kubectl create ns drone
+	
+	  kubectl create -f persistent-volumes.yaml
+	
+	  kubectl create -f volume-claims.yaml
+	  kubectl create -f gitea.yaml
+	  kubectl create -f drone.yaml
