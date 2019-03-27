@@ -1,22 +1,69 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
   name: drone-rbac
 subjects:
   - kind: ServiceAccount
-    # Reference to upper's `metadata.name`
     name: default
-    # Reference to upper's `metadata.namespace`
-    namespace: default
+    namespace: drone
 roleRef:
   kind: ClusterRole
   name: cluster-admin
   apiGroup: rbac.authorization.k8s.io
 ---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  namespace: drone
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: postgres
+  template:
+    metadata:
+      labels:
+        name: postgres
+    spec:
+      containers:
+      - image: postgres:alpine
+        name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: drone
+        - name: POSTGRES_PASSWORD
+          value: drone
+        volumeMounts:
+          - name: drone-data
+            mountPath: "/var/lib/postgresql/data"
+      volumes:
+      - name: drone-data
+        persistentVolumeClaim:
+          claimName: pvc-drone
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: drone
+  labels:
+    name: postgres
+  name: db
+spec:
+  ports:
+  - port: 5432
+    protocol: TCP
+    targetPort: 5432
+  selector:
+    name: postgres
+  type: ClusterIP
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: drone
+  namespace: drone
 spec:
   replicas: 1
   selector:
@@ -30,18 +77,39 @@ spec:
       containers:
         - name: drone
           image: drone/drone:1.0.0-linux-arm
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+          resources:
+            limits:
+              memory: "100Mi"
           env:
           - name: DRONE_KUBERNETES_ENABLED
             value: "true"
           - name: DRONE_KUBERNETES_NAMESPACE
-            value: default
+            value: drone
+          - name: DRONE_DATABASE_DRIVER
+            value: postgres
+          - name: DRONE_DATABASE_DATASOURCE
+            value: postgres://drone:drone@db:5432/drone?sslmode=disable
           - name: DRONE_GITEA_SERVER
-            value: http://192.168.1.211:31657/
+            value: http://git.servidor.local/
           - name: DRONE_RPC_SECRET
             value: 9c3921e3e748aff725d2e16ef31fbc42
           - name: DRONE_SERVER_HOST
-            value: 192.168.1.211:30358
+            value: drone.servidor.local
           - name: DRONE_SERVER_PROTO
+            value: http
+          - name: DRONE_LOGS_DEBUG
+            value: "true"
+          - name: DRONE_RPC_HOST
+            value: drone
+          - name: DRONE_RPC_PROTO
             value: http
           ports:
             - containerPort: 80
@@ -50,6 +118,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: drone
+  namespace: drone
 spec:
   ports:
   - port: 80
@@ -59,3 +128,18 @@ spec:
     name: drone
   sessionAffinity: None
   type: NodePort
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: drone-ingress
+  namespace: drone
+spec:
+  rules:
+  - host: drone.servidor.local
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: drone
+          servicePort: 80

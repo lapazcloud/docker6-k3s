@@ -1,18 +1,56 @@
-kind: PersistentVolumeClaim
-apiVersion: v1
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
 metadata:
-  name: gitea-pvc
+  namespace: gitea
+  name: postgres
 spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 128Mi
+  replicas: 1
+  selector:
+    matchLabels:
+      name: postgres
+  template:
+    metadata:
+      labels:
+        name: postgres
+    spec:
+      containers:
+      - image: postgres:alpine
+        name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: gitea
+        - name: POSTGRES_PASSWORD
+          value: gitea
+        volumeMounts:
+          - name: postgres-data
+            mountPath: "/var/lib/postgresql/data"
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: pvc-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: gitea
+  labels:
+    name: postgres
+  name: db
+spec:
+  ports:
+  - port: 5432
+    protocol: TCP
+    targetPort: 5432
+  selector:
+    name: postgres
+  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gitea
+  namespace: gitea
 spec:
   replicas: 1
   selector:
@@ -40,31 +78,19 @@ spec:
         ports:
         - containerPort: 3000
         - containerPort: 22
-        env:
-        - name: DB_TYPE
-          value: postgres
-        - name: DB_HOST
-          value: db:5432
-        - name: DB_NAME
-          value: gitea
-        - name: DB_USER
-          value: gitea
-        - name: DB_PASSWD
-          value: gitea
-        - name: APP_NAME
-          value: "La Paz Cloud"
         volumeMounts:
-          - name: gitea-pvc
+          - name: gitea-data
             mountPath: "/data"
       volumes:
-      - name: gitea-pvc
+      - name: gitea-data
         persistentVolumeClaim:
-          claimName: gitea-pvc
+          claimName: pvc-gitea
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: gitea
+  namespace: gitea
 spec:
   ports:
   - port: 3000
@@ -73,3 +99,18 @@ spec:
   selector:
     name: gitea
   type: NodePort
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: gitea-ingress
+  namespace: gitea
+spec:
+  rules:
+  - host: git.servidor.local
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: gitea
+          servicePort: 3000
